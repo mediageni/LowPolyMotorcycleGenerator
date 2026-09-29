@@ -8,6 +8,7 @@ import { STYLES } from './styles.js';
 import { paramsFromSeed, setDerived, encodeConfig, decodeConfig } from './params.js';
 import { randomSeed, seedToString, stringToSeed } from './rng.js';
 import { exportGLB, exportOBJ } from './exporter.js';
+import { exportRotationGIF } from './gif-export.js';
 import { createUI } from './ui.js';
 
 const canvas = document.getElementById('c');
@@ -47,6 +48,11 @@ const app = {
   loadConfig(p) { this.params = p; rebuild(true); this.sync(); },
   exportGLB() { return exportGLB(bike, `motorcycle-${seedToString(this.params.seed)}`); },
   exportOBJ() { exportOBJ(bike, `motorcycle-${seedToString(this.params.seed)}`); },
+  exportGIF(onProgress) {
+    const name = document.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return exportRotationGIF({ scene, camera, controls, renderer,
+      filename: `${name}-${seedToString(this.params.seed)}.gif`, onProgress, renderLoop: renderFrame });
+  },
   shareURL() { const u = new URL(location.href); u.search = '?c=' + encodeConfig(this.params); return u.toString(); },
   get car() { return bike; },
   sync() {},
@@ -114,7 +120,8 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+const renderFrame = () => { controls.update(); renderer.render(scene, camera); };
+renderer.setAnimationLoop(renderFrame);
 
 // expose for smoke tests
 window.__app = app;
