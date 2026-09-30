@@ -5,6 +5,13 @@
 // swaps in a step-through SCOOTER body. No UI, no globals. Deterministic from seed.
 
 import * as THREE from "three";
+import { addMotorcycleDetails } from "./details.js";
+import { detailed } from "@engine/options.js";
+import {
+  tube as detailTube,
+  mergePart,
+  chamferedBox,
+} from "@engine/geometry.js";
 
 const Y = new THREE.Vector3(0, 1, 0);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -33,14 +40,18 @@ function box(group, w, h, d, mat, cx, cy, cz) {
   return m;
 }
 // a faceted wheel (tire + rim + hub) centred at (x, R), axle along Z
-function wheel(group, x, R, width, mats) {
+function wheel(group, x, R, width, mats, p) {
   const g = new THREE.Group();
   const tire = new THREE.Mesh(
-    new THREE.CylinderGeometry(R, R, width, 16),
+    detailed(p)
+      ? new THREE.TorusGeometry(R - width * 0.5, width * 0.5, 6, 16)
+      : new THREE.CylinderGeometry(R, R, width, 16),
     mats.tire,
   );
   const rim = new THREE.Mesh(
-    new THREE.CylinderGeometry(R * 0.58, R * 0.58, width * 1.04, 16),
+    detailed(p) && p.wheelType === "spoke"
+      ? new THREE.TorusGeometry(R * 0.6, R * 0.045, 4, 16)
+      : new THREE.CylinderGeometry(R * 0.58, R * 0.58, width * 1.04, 16),
     mats.rim,
   );
   const hub = new THREE.Mesh(
@@ -53,8 +64,31 @@ function wheel(group, x, R, width, mats) {
     m.receiveShadow = true;
     g.add(m);
   }
+  if (detailed(p)) {
+    tire.rotation.x = 0;
+    if (p.wheelType === "spoke") {
+      rim.rotation.x = 0;
+      for (let k = 0; k < 12; k++)
+        for (const side of [-1, 1]) {
+          const a = (k * Math.PI) / 6;
+          detailTube(
+            g,
+            mats.chrome,
+            [0, 0, side * width * 0.25],
+            [
+              Math.cos(a) * R * 0.58,
+              Math.sin(a) * R * 0.58,
+              side * width * 0.3,
+            ],
+            R * 0.015,
+            4,
+          );
+        }
+    }
+  }
   g.position.set(x, R, 0);
   group.add(g);
+  if (detailed(p)) mergePart(g);
   return g;
 }
 
@@ -63,12 +97,29 @@ function buildScooter(g, p, mats) {
     R = p.wheelR * 0.82;
   const fx = wb / 2,
     rx = -wb / 2;
-  wheel(g, fx, R, p.wheelR * 0.34, mats);
-  wheel(g, rx, R, p.wheelR * 0.34, mats);
+  wheel(g, fx, R, p.wheelR * 0.34, mats, p);
+  wheel(g, rx, R, p.wheelR * 0.34, mats, p);
   const floorY = R + 0.06;
   box(g, wb * 0.6, 0.1, 0.34, mats.frame, 0, floorY, 0); // floorboard
-  box(g, wb * 0.5, 0.5, 0.4, mats.body, rx + 0.15, R + 0.5, 0); // rear body / engine cowl
-  const shield = box(g, 0.14, 0.8, 0.4, mats.body, fx - 0.05, R + 0.55, 0); // front leg shield
+  if (detailed(p))
+    chamferedBox(
+      g,
+      mats.body,
+      [wb * 0.55, 0.48, 0.4],
+      [rx + 0.15, R + 0.49, 0],
+      0.25,
+    );
+  else box(g, wb * 0.5, 0.5, 0.4, mats.body, rx + 0.15, R + 0.5, 0); // rear body / engine cowl
+  const shield = detailed(p)
+    ? chamferedBox(
+        g,
+        mats.body,
+        [0.4, 0.8, 0.14],
+        [fx - 0.05, R + 0.55, 0],
+        0.22,
+      )
+    : box(g, 0.14, 0.8, 0.4, mats.body, fx - 0.05, R + 0.55, 0);
+  if (detailed(p)) shield.geometry.rotateY(Math.PI / 2);
   shield.rotation.z = -0.22;
   box(g, 0.5, 0.12, 0.34, mats.seat, rx + 0.2, R + 0.82, 0); // seat
   tube(g, V(fx, R, 0), V(fx - 0.08, R + 0.95, 0), 0.035, mats.chrome); // steering column
@@ -85,7 +136,8 @@ function buildScooter(g, p, mats) {
   );
   hl.rotation.z = Math.PI / 2;
   hl.position.set(fx + 0.04, R + 0.7, 0);
-  g.add(hl);
+  if (p.lightsOn !== false) g.add(hl);
+  else hl.geometry.dispose();
 }
 
 function buildBike(g, p, mats) {
@@ -102,8 +154,8 @@ function buildBike(g, p, mats) {
     R + Math.cos(p.rake) * forkLen,
     0,
   );
-  wheel(g, fx, R, tw, mats);
-  wheel(g, rx, R * (p.form === "chopper" ? 1.05 : 1.0), tw, mats);
+  wheel(g, fx, R, tw, mats, p);
+  wheel(g, rx, R * (p.form === "chopper" ? 1.05 : 1.0), tw, mats, p);
   for (const z of [0.1, -0.1])
     tube(g, V(fx, R, z), V(head.x, head.y, z), 0.035, mats.chrome);
 
@@ -129,7 +181,8 @@ function buildBike(g, p, mats) {
   hl.rotation.z = Math.PI / 2;
   hl.position.set(head.x + 0.06, head.y - 0.12, 0);
   hl.castShadow = true;
-  g.add(hl);
+  if (p.lightsOn !== false) g.add(hl);
+  else hl.geometry.dispose();
 
   // engine, frame, tank, seat heights
   const seatY = R + p.stance;
@@ -157,6 +210,11 @@ function buildBike(g, p, mats) {
   );
   tank.geometry.translate(0, 0, 0);
   tank.scale.set(1, 1, 1);
+  if (detailed(p)) {
+    tank.geometry.dispose();
+    tank.geometry = new THREE.IcosahedronGeometry(1, 1);
+    tank.scale.set(wb * 0.23, 0.18, tw * 1.05);
+  }
   const seatLen = p.form === "cruiser" ? wb * 0.5 : wb * 0.4;
   box(g, seatLen, 0.1, tw * 1.4, mats.seat, -wb * 0.18, seatY + 0.04, 0);
   if (p.form === "sport" || p.form === "cafe") {
@@ -185,7 +243,7 @@ function buildBike(g, p, mats) {
   );
 
   // fenders for scrambler / cruiser
-  if (p.form === "scrambler" || p.form === "cruiser") {
+  if (!detailed(p) && (p.form === "scrambler" || p.form === "cruiser")) {
     const fender = (x, rr) => {
       const m = box(
         g,
@@ -209,6 +267,7 @@ export function buildMotorcycle(p, mats) {
   g.name = "motorcycle";
   if (p.form === "scooter") buildScooter(g, p, mats);
   else buildBike(g, p, mats);
+  addMotorcycleDetails(g, p, mats);
 
   const box3 = new THREE.Box3().setFromObject(g);
   const size = new THREE.Vector3(),
