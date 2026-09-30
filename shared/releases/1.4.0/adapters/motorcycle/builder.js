@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { addMotorcycleDetails } from "./details.js";
 import { detailed } from "@engine/options.js";
 import { motorcycleLayout } from "./layout.js";
+import { sportTankGeometry, sportTail, sportLamps } from "./sport.js";
 import {
   tube as detailTube,
   mergePart,
@@ -199,11 +200,11 @@ function buildBike(g, p, mats) {
   hl.rotation.z = Math.PI / 2;
   hl.position.set(head.x + 0.06, head.y - 0.12, 0);
   hl.castShadow = true;
-  if (p.lightsOn !== false) g.add(hl);
+  if (p.lightsOn !== false && !(detailed(p) && p.form === "sport")) g.add(hl);
   else hl.geometry.dispose();
 
   // engine, frame, tank, seat heights
-  const seatY = R + p.stance;
+  const seatY = layout.seatY;
   const engY = R + 0.04;
   box(g, wb * 0.34, 0.42, tw * 1.5, mats.engine, -wb * 0.02, engY + 0.05, 0); // engine block
   box(g, wb * 0.18, 0.16, tw * 1.2, mats.chrome, wb * 0.02, engY + 0.32, 0); // cylinder head detail
@@ -230,8 +231,13 @@ function buildBike(g, p, mats) {
   tank.scale.set(1, 1, 1);
   if (detailed(p)) {
     tank.geometry.dispose();
-    tank.geometry = new THREE.IcosahedronGeometry(1, 1);
-    tank.scale.set(wb * 0.23, 0.18, tw * 1.05);
+    if (p.form === "sport") {
+      tank.geometry = sportTankGeometry(p, layout);
+      tank.position.set(0, 0, 0);
+    } else {
+      tank.geometry = new THREE.IcosahedronGeometry(1, 1);
+      tank.scale.set(wb * 0.23, 0.18, tw * 1.05);
+    }
     if (p.form === "dirt") tank.scale.set(wb * 0.18, 0.14, tw * 0.75);
   }
   box(
@@ -265,7 +271,8 @@ function buildBike(g, p, mats) {
     0.06,
     mats.frame,
   );
-  if (p.form === "sport" || p.form === "cafe") {
+  if (p.form === "sport" && detailed(p)) sportTail(g, p, mats, layout);
+  else if (p.form === "sport" || p.form === "cafe") {
     // upswept tail
     const tail = box(
       g,
@@ -337,7 +344,9 @@ export function buildMotorcycle(p, mats) {
   if (p.form === "scooter") buildScooter(g, p, mats);
   else buildBike(g, p, mats);
   const layout = motorcycleLayout(p);
-  if (p.lightsOn !== false) {
+  if (p.lightsOn !== false && detailed(p) && p.form === "sport") {
+    sportLamps(g, p, mats, layout);
+  } else if (p.lightsOn !== false) {
     const mount = new THREE.Group();
     mount.name = "Headlamp bracket";
     const forkPoint = new THREE.Vector3(...layout.head).lerp(

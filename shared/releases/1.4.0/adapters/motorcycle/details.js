@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { motorcycleLayout } from "./layout.js";
+import { sportFairing, sportScreen } from "./sport.js";
 import {
   part,
   box,
@@ -241,7 +242,8 @@ export function addMotorcycleDetails(root, p, mats) {
     }
     mergePart(group);
   }
-  if (p.screenOn) {
+  if (p.screenOn && p.form === "sport") sportScreen(root, p, mats, a);
+  else if (p.screenOn) {
     const group = part(root, "Windscreen");
     const screen = box(
       group,
@@ -264,7 +266,8 @@ export function addMotorcycleDetails(root, p, mats) {
       );
     mergePart(group);
   }
-  if (p.fairingOn && !a.scooter) {
+  if (p.fairingOn && p.form === "sport") sportFairing(root, p, mats, a);
+  else if (p.fairingOn && !a.scooter) {
     const group = part(root, "Fairing");
     if (["touring", "adventure"].includes(p.form)) {
       const touring = p.form === "touring";

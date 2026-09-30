@@ -6,7 +6,10 @@ export function motorcycleLayout(p) {
   const frontX = p.wheelbase / 2,
     rearX = -frontX;
   const offroad = ["adventure", "dirt"].includes(p.form);
-  const forkLength = 0.62 + p.stance * 0.4 + (offroad ? 0.16 : 0);
+  const superbike = p.form === "sport" && p.detailVersion === 1;
+  const stance = superbike ? p.stance * 0.65 : p.stance;
+  const forkLength =
+    (superbike ? 0.44 : 0.62) + stance * 0.4 + (offroad ? 0.16 : 0);
   const head = scooter
     ? [frontX - 0.08, radius + 0.95, 0]
     : [
@@ -26,7 +29,7 @@ export function motorcycleLayout(p) {
     head[1] + (scooter ? 0 : p.form === "sport" ? -0.04 : 0.08),
     0,
   ];
-  const seatY = radius + (scooter ? 0.82 : p.stance);
+  const seatY = radius + (scooter ? 0.82 : stance);
   const seatX = scooter ? rearX + 0.2 : -p.wheelbase * 0.18;
   const seatLength = scooter
     ? 0.5
