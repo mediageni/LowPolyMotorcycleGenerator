@@ -64,8 +64,41 @@ export const ARCHETYPES = {
     rake: [0.2, 0.3],
     stance: [0.5, 0.6],
   },
+  adventure: {
+    label: "Adventure",
+    form: "adventure",
+    wheelbase: [1.45, 1.65],
+    wheelR: [0.38, 0.43],
+    rake: [0.24, 0.32],
+    stance: [0.73, 0.84],
+  },
+  touring: {
+    label: "Touring",
+    form: "touring",
+    wheelbase: [1.5, 1.74],
+    wheelR: [0.34, 0.39],
+    rake: [0.28, 0.38],
+    stance: [0.62, 0.73],
+  },
+  dirt: {
+    label: "Dirt Bike",
+    form: "dirt",
+    wheelbase: [1.36, 1.54],
+    wheelR: [0.39, 0.45],
+    rake: [0.21, 0.29],
+    stance: [0.77, 0.85],
+  },
 };
 export const ARCHETYPE_KEYS = Object.keys(ARCHETYPES);
+// Unspecified types in old seed URLs retain their original six-preset mapping.
+const LEGACY_KEYS = [
+  "cruiser",
+  "sport",
+  "cafe",
+  "chopper",
+  "scrambler",
+  "scooter",
+];
 
 export const SLIDERS = [
   { key: "wheelbase", label: "Wheelbase", min: 1.0, max: 2.1, step: 0.02 },
@@ -91,9 +124,7 @@ const PARAM_KEYS = Object.keys(BASE);
 export function paramsFromSeed(seed, archetype) {
   const r = makeRng(seed);
   const key =
-    archetype && ARCHETYPES[archetype]
-      ? archetype
-      : rng.pick(r, ARCHETYPE_KEYS);
+    archetype && ARCHETYPES[archetype] ? archetype : rng.pick(r, LEGACY_KEYS);
   const a = { ...BASE, ...ARCHETYPES[key] };
   const p = { seed: seed >>> 0, archetype: key };
   for (const k of PARAM_KEYS) p[k] = sample(r, a[k]);

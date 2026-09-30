@@ -7,6 +7,7 @@
 import * as THREE from "three";
 import { addMotorcycleDetails } from "./details.js";
 import { detailed } from "@engine/options.js";
+import { motorcycleLayout } from "./layout.js";
 import {
   tube as detailTube,
   mergePart,
@@ -42,6 +43,7 @@ function box(group, w, h, d, mat, cx, cy, cz) {
 // a faceted wheel (tire + rim + hub) centred at (x, R), axle along Z
 function wheel(group, x, R, width, mats, p) {
   const g = new THREE.Group();
+  g.name = x > 0 ? "Front wheel" : "Rear wheel";
   const tire = new THREE.Mesh(
     detailed(p)
       ? new THREE.TorusGeometry(R - width * 0.5, width * 0.5, 6, 16)
@@ -75,15 +77,27 @@ function wheel(group, x, R, width, mats, p) {
             g,
             mats.chrome,
             [0, 0, side * width * 0.25],
-            [
-              Math.cos(a) * R * 0.58,
-              Math.sin(a) * R * 0.58,
-              side * width * 0.3,
-            ],
+            [Math.cos(a) * R * 0.6, Math.sin(a) * R * 0.6, side * R * 0.018],
             R * 0.015,
             4,
           );
         }
+    }
+    if (["dirt", "adventure"].includes(p.form)) {
+      for (let k = 0; k < 24; k++) {
+        const angle = (k * Math.PI) / 12;
+        const block = box(
+          g,
+          R * 0.1,
+          R * 0.08,
+          width * 0.85,
+          mats.tire,
+          Math.cos(angle) * (R - R * 0.015),
+          Math.sin(angle) * (R - R * 0.015),
+          0,
+        );
+        block.rotation.z = angle - Math.PI / 2;
+      }
     }
   }
   g.position.set(x, R, 0);
@@ -101,6 +115,16 @@ function buildScooter(g, p, mats) {
   wheel(g, rx, R, p.wheelR * 0.34, mats, p);
   const floorY = R + 0.06;
   box(g, wb * 0.6, 0.1, 0.34, mats.frame, 0, floorY, 0); // floorboard
+  tube(
+    g,
+    V(wb * 0.25, floorY, 0),
+    V(fx - 0.08, R + 0.32, 0),
+    0.045,
+    mats.frame,
+  );
+  // Carry the rear cowl and seat on the floorboard instead of leaving an air gap.
+  box(g, wb * 0.37, 0.2, 0.28, mats.frame, rx + 0.15, R + 0.19, 0);
+  tube(g, V(rx, R, 0), V(rx + 0.15, R + 0.36, 0), 0.045, mats.frame);
   if (detailed(p))
     chamferedBox(
       g,
@@ -122,6 +146,7 @@ function buildScooter(g, p, mats) {
   if (detailed(p)) shield.geometry.rotateY(Math.PI / 2);
   shield.rotation.z = -0.22;
   box(g, 0.5, 0.12, 0.34, mats.seat, rx + 0.2, R + 0.82, 0); // seat
+  box(g, 0.35, 0.09, 0.25, mats.frame, rx + 0.2, R + 0.755, 0);
   tube(g, V(fx, R, 0), V(fx - 0.08, R + 0.95, 0), 0.035, mats.chrome); // steering column
   tube(
     g,
@@ -148,25 +173,18 @@ function buildBike(g, p, mats) {
     rx = -wb / 2;
 
   // front fork: from front hub up & back to the steering head, raked by p.rake
-  const forkLen = 0.62 + p.stance * 0.4;
-  const head = V(
-    fx - Math.sin(p.rake) * forkLen,
-    R + Math.cos(p.rake) * forkLen,
-    0,
-  );
+  const layout = motorcycleLayout(p);
+  const head = V(...layout.head);
   wheel(g, fx, R, tw, mats, p);
   wheel(g, rx, R * (p.form === "chopper" ? 1.05 : 1.0), tw, mats, p);
   for (const z of [0.1, -0.1])
     tube(g, V(fx, R, z), V(head.x, head.y, z), 0.035, mats.chrome);
+  tube(g, V(head.x, head.y, -0.11), V(head.x, head.y, 0.11), 0.035, mats.frame);
 
   // steering + bars + headlight
-  const barW =
-    p.form === "sport"
-      ? 0.34
-      : p.form === "cruiser" || p.form === "chopper"
-        ? 0.62
-        : 0.46;
-  const barY = head.y + (p.form === "sport" ? -0.04 : 0.08);
+  const barW = layout.barWidth;
+  const barY = layout.bar[1];
+  tube(g, head, V(head.x - 0.04, barY, 0), 0.028, mats.chrome);
   tube(
     g,
     V(head.x - 0.04, barY, barW / 2),
@@ -214,9 +232,39 @@ function buildBike(g, p, mats) {
     tank.geometry.dispose();
     tank.geometry = new THREE.IcosahedronGeometry(1, 1);
     tank.scale.set(wb * 0.23, 0.18, tw * 1.05);
+    if (p.form === "dirt") tank.scale.set(wb * 0.18, 0.14, tw * 0.75);
   }
-  const seatLen = p.form === "cruiser" ? wb * 0.5 : wb * 0.4;
-  box(g, seatLen, 0.1, tw * 1.4, mats.seat, -wb * 0.18, seatY + 0.04, 0);
+  box(
+    g,
+    layout.seatLength,
+    0.1,
+    tw * (p.form === "dirt" ? 1.05 : 1.4),
+    mats.seat,
+    layout.seatX,
+    seatY + 0.04,
+    0,
+  );
+  for (const side of [-1, 1]) {
+    const front = V(...layout.frontRail),
+      rear = V(...layout.rearRail);
+    front.z = rear.z = side * layout.railZ;
+    tube(g, front, rear, 0.03, mats.frame);
+    tube(g, seatFront, front, 0.035, mats.frame);
+    tube(g, V(rx, layout.rearRadius, side * tw * 0.5), rear, 0.03, mats.frame);
+  }
+  // Tank saddle links its underside to the actual backbone at that X coordinate.
+  const tankX = wb * 0.06;
+  const t = Math.max(
+    0,
+    Math.min(1, (tankX - seatFront.x) / Math.max(0.001, head.x - seatFront.x)),
+  );
+  tube(
+    g,
+    seatFront.clone().lerp(head, t),
+    V(tankX, seatY, 0),
+    0.06,
+    mats.frame,
+  );
   if (p.form === "sport" || p.form === "cafe") {
     // upswept tail
     const tail = box(
@@ -233,6 +281,13 @@ function buildBike(g, p, mats) {
   }
 
   // exhaust along the lower right side
+  tube(
+    g,
+    V(wb * 0.05, engY - 0.06, tw * 0.6),
+    V(wb * 0.05, engY - 0.06, 0.16),
+    0.035,
+    mats.chrome,
+  );
   tube(
     g,
     V(wb * 0.05, engY - 0.06, 0.16),
@@ -255,6 +310,20 @@ function buildBike(g, p, mats) {
         rr * 2 + 0.12,
         0,
       );
+      for (const side of [-1, 1]) {
+        const anchor =
+          x === fx
+            ? head.clone().lerp(V(fx, R, 0), 0.65)
+            : V(...layout.rearRail);
+        anchor.z = side * tw * 0.4;
+        tube(
+          g,
+          anchor,
+          V(x, rr * 2 + 0.12, side * tw * 0.4),
+          0.015,
+          mats.frame,
+        );
+      }
       return m;
     };
     fender(fx, R);
@@ -267,6 +336,17 @@ export function buildMotorcycle(p, mats) {
   g.name = "motorcycle";
   if (p.form === "scooter") buildScooter(g, p, mats);
   else buildBike(g, p, mats);
+  const layout = motorcycleLayout(p);
+  if (p.lightsOn !== false) {
+    const mount = new THREE.Group();
+    mount.name = "Headlamp bracket";
+    const forkPoint = new THREE.Vector3(...layout.head).lerp(
+      V(layout.frontX, layout.radius, 0),
+      0.18,
+    );
+    tube(mount, forkPoint, V(...layout.lamp), 0.026, mats.frame);
+    g.add(mount);
+  }
   addMotorcycleDetails(g, p, mats);
 
   const box3 = new THREE.Box3().setFromObject(g);
